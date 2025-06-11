@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
-void main() => runApp(PokerApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized(); // required for async setup
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(PokerApp());
+}
 
 class PokerApp extends StatelessWidget {
+  const PokerApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -31,6 +41,8 @@ class MainPage extends StatelessWidget {
     {'label': 'End Game - Player', 'route': '/end_player'},
   ];
 
+ MainPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -54,31 +66,43 @@ class MainPage extends StatelessWidget {
 }
 
 class HostGamePage extends StatelessWidget {
+  const HostGamePage({super.key});
+
   @override
   Widget build(BuildContext context) => Scaffold(body: Center(child: Text("Host Game Page")));
 }
 
 class JoinGamePage extends StatelessWidget {
+  const JoinGamePage({super.key});
+
   @override
   Widget build(BuildContext context) => Scaffold(body: Center(child: Text("Join Game Page")));
 }
 
 class DuringGameHostPage extends StatelessWidget {
+  const DuringGameHostPage({super.key});
+
   @override
   Widget build(BuildContext context) => Scaffold(body: Center(child: Text("During Game - Host")));
 }
 
 class DuringGamePlayerPage extends StatelessWidget {
+  const DuringGamePlayerPage({super.key});
+
   @override
   Widget build(BuildContext context) => Scaffold(body: Center(child: Text("During Game - Player")));
 }
 
 class EndGameHostPage extends StatelessWidget {
+  const EndGameHostPage({super.key});
+
   @override
   Widget build(BuildContext context) => Scaffold(body: Center(child: Text("End Game - Host")));
 }
 
 class EndGamePlayerPage extends StatelessWidget {
+  const EndGamePlayerPage({super.key});
+
   @override
   Widget build(BuildContext context) => Scaffold(body: Center(child: Text("End Game - Player")));
 }
