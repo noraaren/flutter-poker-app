@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // required for async setup
@@ -100,9 +101,74 @@ class EndGameHostPage extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(body: Center(child: Text("End Game - Host")));
 }
 
-class EndGamePlayerPage extends StatelessWidget {
+class EndGamePlayerPage extends StatefulWidget {
   const EndGamePlayerPage({super.key});
 
   @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("End Game - Player")));
+  State<EndGamePlayerPage> createState() => _EndGamePlayerPageState();
+}
+
+class _EndGamePlayerPageState extends State<EndGamePlayerPage> {
+  Future<void> payWithVenmo({
+    required String venmoUsername,
+    required double amount,
+    required String note,
+  }) async {
+    // Try the Venmo app first
+    final venmoUrl = Uri.parse(
+      'venmo://paycharge?txn=pay'
+      '&recipients=$venmoUsername'
+      '&amount=${amount.toStringAsFixed(2)}'
+      '&note=${Uri.encodeComponent(note)}'
+    );
+
+    // Fallback to web URL
+    final webUrl = Uri.parse(
+      'https://venmo.com/$venmoUsername?txn=pay'
+      '&amount=${amount.toStringAsFixed(2)}'
+      '&note=${Uri.encodeComponent(note)}'
+    );
+
+    try {
+      if (await canLaunchUrl(venmoUrl)) {
+        await launchUrl(venmoUrl, mode: LaunchMode.externalApplication);
+      } else if (await canLaunchUrl(webUrl)) {
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      } else {
+        // Show a snackbar to inform the user
+        if (mounted) {  // Check if widget is still mounted
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not launch Venmo. Please install Venmo or visit venmo.com'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {  // Check if widget is still mounted
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error launching Venmo: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(body: Center(child: Column(
+    children: [
+      Text("End Game - Player"),
+      ElevatedButton(
+        onPressed: () {
+          payWithVenmo(
+            venmoUsername: "renaaron", // e.g. "johndoe"
+            amount: 10.0,
+            note: "Thanks for lunch!",
+          );
+        },
+        child: Text("Pay with Venmo"),
+      )
+    ],
+  )));
 }
