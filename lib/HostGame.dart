@@ -25,7 +25,7 @@ void createGameDocument() {
   "BuyIns" : 1, 
 };
 
-  db.collection("games").add(table).then((DocumentReference doc) {
+  db.collection("Games").add(table).then((DocumentReference doc) {
     print('DocumentSnapshot added with ID: ${doc.id}');
   });
 }
