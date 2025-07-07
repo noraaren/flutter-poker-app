@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-
-
+import 'features/game/pages/host_game_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // required for async setup
@@ -43,7 +42,7 @@ class MainPage extends StatelessWidget {
     {'label': 'End Game - Player', 'route': '/end_player'},
   ];
 
- MainPage({super.key});
+  MainPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -65,13 +64,6 @@ class MainPage extends StatelessWidget {
       ),
     );
   }
-}
-
-class HostGamePage extends StatelessWidget {
-  const HostGamePage({super.key});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("Host Game Page")));
 }
 
 class JoinGamePage extends StatelessWidget {

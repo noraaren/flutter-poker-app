@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/services/firebase_service.dart';
+import '../../../../core/utils/game_id_generator.dart';
 import '../models/game_model.dart';
 import '../models/player_model.dart';
 
@@ -31,8 +32,22 @@ class GameProvider extends ChangeNotifier {
     _clearError();
 
     try {
+      // Generate a custom 7-character game ID
+      String gameId;
+      bool isUnique = false;
+      int attempts = 0;
+      do {
+        gameId = GameIdGenerator.generateGameId();
+        final existingGame = await _firebaseService.games.doc(gameId).get();
+        isUnique = !existingGame.exists;
+        attempts++;
+        if (attempts > 10) {
+          throw Exception('Unable to generate unique game ID');
+        }
+      } while (!isUnique);
 
       final gameData = {
+        'gameId': gameId,
         'hostId': hostId,
         'hostName': hostName,
         'players': [
@@ -54,13 +69,10 @@ class GameProvider extends ChangeNotifier {
         'gameState': {},
       };
 
-      final docRef = await _firebaseService.addDocument(
-        _firebaseService.games,
-        gameData,
-      );
+      await _firebaseService.games.doc(gameId).set(gameData);
 
       _setLoading(false);
-      return docRef.id;
+      return gameId;
     } catch (e) {
       _setError(e.toString());
       return null;
@@ -73,7 +85,15 @@ class GameProvider extends ChangeNotifier {
     _clearError();
 
     try {
-      final gameRef = _firebaseService.games.doc(gameId);
+      // Clean and format the game ID
+      final formattedGameId = GameIdGenerator.formatGameId(gameId);
+      
+      // Validate the game ID format
+      if (!GameIdGenerator.isValidGameId(formattedGameId)) {
+        throw Exception('Invalid game ID format');
+      }
+      
+      final gameRef = _firebaseService.games.doc(formattedGameId);
       final gameDoc = await gameRef.get();
 
       if (!gameDoc.exists) {
