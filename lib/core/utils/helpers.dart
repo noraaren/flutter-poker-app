@@ -1,0 +1,1 @@
+// Use for helper functions that are used across the app

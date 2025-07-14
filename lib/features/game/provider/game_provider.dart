@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/services/firebase_service.dart';
 import '../models/game_model.dart';
-import '../models/player_model.dart';
 
 class GameProvider extends ChangeNotifier {
   final FirebaseService _firebaseService;
@@ -10,12 +9,10 @@ class GameProvider extends ChangeNotifier {
   GameProvider(this._firebaseService);
 
   GameModel? _currentGame;
-  List<GameModel> _availableGames = [];
   bool _isLoading = false;
   String? _error;
 
   GameModel? get currentGame => _currentGame;
-  List<GameModel> get availableGames => _availableGames;
   bool get isLoading => _isLoading;
   String? get error => _error;
 

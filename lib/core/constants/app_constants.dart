@@ -1,0 +1,1 @@
+// Use for constants that are used across the app

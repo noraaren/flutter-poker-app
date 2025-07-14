@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'core/services/venmo_service.dart';
 
 
 
@@ -111,66 +111,35 @@ class EndGamePlayerPage extends StatefulWidget {
 }
 
 class _EndGamePlayerPageState extends State<EndGamePlayerPage> {
-  Future<void> payWithVenmo({
-    required String venmoUsername,
-    required double amount,
-    required String note,
-  }) async {
-    // Try the Venmo app first
-    final venmoUrl = Uri.parse(
-      'venmo://paycharge?txn=pay'
-      '&recipients=$venmoUsername'
-      '&amount=${amount.toStringAsFixed(2)}'
-      '&note=${Uri.encodeComponent(note)}'
-    );
-
-    // Fallback to web URL
-    final webUrl = Uri.parse(
-      'https://venmo.com/$venmoUsername?txn=pay'
-      '&amount=${amount.toStringAsFixed(2)}'
-      '&note=${Uri.encodeComponent(note)}'
-    );
-
-    try {
-      if (await canLaunchUrl(venmoUrl)) {
-        await launchUrl(venmoUrl, mode: LaunchMode.externalApplication);
-      } else if (await canLaunchUrl(webUrl)) {
-        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-      } else {
-        // Show a snackbar to inform the user
-        if (mounted) {  // Check if widget is still mounted
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not launch Venmo. Please install Venmo or visit venmo.com'),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {  // Check if widget is still mounted
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error launching Venmo: $e'),
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(body: Center(child: Column(
+    mainAxisAlignment: MainAxisAlignment.center,
     children: [
-      Text("End Game - Player"),
+      Text("End Game - Player", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      SizedBox(height: 20),
       ElevatedButton(
-        onPressed: () {
-          payWithVenmo(
+        onPressed: () async {
+          await VenmoService.payWithVenmo(
             venmoUsername: "renaaron", // e.g. "johndoe"
             amount: 10.0,
             note: "Thanks for lunch!",
+            context: context,
           );
         },
         child: Text("Pay with Venmo"),
-      )
+      ),
+      SizedBox(height: 10),
+      ElevatedButton(
+        onPressed: () async {
+          await VenmoService.requestWithVenmo(
+            venmoUsername: "renaaron", // e.g. "johndoe"
+            amount: 10.0,
+            note: "Poker game buy-in",
+            context: context,
+          );
+        },
+        child: Text("Request with Venmo"),
+      ),
     ],
   )));
 }
