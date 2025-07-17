@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'features/game/pages/host_game_page.dart';
+import 'features/game/pages/join_game_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // required for async setup
@@ -64,13 +65,6 @@ class MainPage extends StatelessWidget {
       ),
     );
   }
-}
-
-class JoinGamePage extends StatelessWidget {
-  const JoinGamePage({super.key});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("Join Game Page")));
 }
 
 class DuringGameHostPage extends StatelessWidget {
