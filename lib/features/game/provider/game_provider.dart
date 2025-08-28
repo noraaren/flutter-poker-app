@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/services/firebase_service.dart';
 import '../../../../core/utils/game_id_generator.dart';
 import '../models/game_model.dart';
+import '../models/player_model.dart';
 
 class GameProvider extends ChangeNotifier {
   final FirebaseService _firebaseService;
@@ -43,20 +44,21 @@ class GameProvider extends ChangeNotifier {
         }
       } while (!isUnique);
 
+      // Create host player using PlayerModel
+      final hostPlayer = PlayerModel(
+        id: hostId,
+        name: hostName,
+        inFor: buyIn,
+        isHost: true,
+        isOnline: true,
+        hasPaid: false,
+      );
+
       final gameData = {
         'gameId': gameId,
         'hostId': hostId,
         'hostName': hostName,
-        'players': [
-          {
-            'id': hostId,
-            'name': hostName,
-            'inFor': buyIn,
-            'isHost': true,
-            'hasPaid': false,
-            'isOnline': true,
-          }
-        ],
+        'players': [hostPlayer.toJson()],
         'status': GameStatus.waiting.name,
         'type': type.name,
         'maxPlayers': maxPlayers,
@@ -101,7 +103,7 @@ class GameProvider extends ChangeNotifier {
       final players = List<Map<String, dynamic>>.from(gameData['players']);
 
       // Check if player is already in the game
-      if (players.any((player) => player['id'] == playerId)) {
+      if (players.any((existingPlayer) => existingPlayer['id'] == playerId)) {
         throw Exception('Already in this game');
       }
 
@@ -110,17 +112,17 @@ class GameProvider extends ChangeNotifier {
         throw Exception('Game is full');
       }
 
-      // Add player to the game
-      final newPlayer = {
-        'id': playerId,
-        'name': playerName,
-        'inFor': buyIn,
-        'isHost': false,
-        'hasPaid': false,
-        'isOnline': true,
-      };
-
-      players.add(newPlayer);
+      // Create player using PlayerModel
+      final newPlayer = PlayerModel(
+        id: playerId,
+        name: playerName,
+        inFor: buyIn,
+        isHost: false,
+        isOnline: true,
+        hasPaid: false,
+      );
+      
+      players.add(newPlayer.toJson());
 
       await gameRef.update({
         'players': players,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../provider/game_provider.dart';
-import '../models/game_model.dart';
 import '../../../core/services/firebase_service.dart';
 
 class JoinGamePage extends StatefulWidget {
@@ -51,6 +50,7 @@ class _JoinGamePageState extends State<JoinGamePage> {
 
     try {
       final playerId = 'player_${DateTime.now().millisecondsSinceEpoch}';
+      
       final success = await _gameProvider.joinGame(
         _gameIdController.text.trim(),
         playerId,
