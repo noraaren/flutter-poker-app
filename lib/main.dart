@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'core/services/venmo_service.dart';
+import 'features/game/pages/end_game_page.dart';
+import 'features/game/models/player_model.dart';
+
 import 'features/game/pages/host_game_page.dart';
 import 'features/game/pages/join_game_page.dart';
 
@@ -27,7 +31,19 @@ class PokerApp extends StatelessWidget {
         '/during_host': (_) => DuringGameHostPage(),
         '/during_player': (_) => DuringGamePlayerPage(),
         '/end_host': (_) => EndGameHostPage(),
-        '/end_player': (_) => EndGamePlayerPage(),
+        
+        '/end_player': (_) => EndGamePage(
+          player: const PlayerModel(
+            id: 'test_player',
+            name: 'John Doe',
+            inFor: 100,
+            isHost: false,
+            isOnline: true,
+            hasPaid: true,
+          ),
+          hostVenmoUsername: 'renaaron',
+          initialBuyIn: 100, // Initial buy-in from game data
+        ),
       },
     );
   }
@@ -41,6 +57,7 @@ class MainPage extends StatelessWidget {
     {'label': 'During Game - Player', 'route': '/during_player'},
     {'label': 'End Game - Host', 'route': '/end_host'},
     {'label': 'End Game - Player', 'route': '/end_player'},
+
   ];
 
   MainPage({super.key});
@@ -88,9 +105,6 @@ class EndGameHostPage extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(body: Center(child: Text("End Game - Host")));
 }
 
-class EndGamePlayerPage extends StatelessWidget {
-  const EndGamePlayerPage({super.key});
 
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("End Game - Player")));
-}
+
+
