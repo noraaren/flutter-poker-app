@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'core/services/venmo_service.dart';
 import 'features/game/pages/end_game_page.dart';
 import 'features/game/models/player_model.dart';
+import 'features/game/models/game_model.dart';
+import 'features/game/pages/during_game_page.dart';
 
 import 'features/game/pages/host_game_page.dart';
 import 'features/game/pages/join_game_page.dart';
@@ -28,8 +29,28 @@ class PokerApp extends StatelessWidget {
       routes: {
         '/host': (_) => HostGamePage(),
         '/join': (_) => JoinGamePage(),
-        '/during_host': (_) => DuringGameHostPage(),
-        '/during_player': (_) => DuringGamePlayerPage(),
+        '/during_host': (_) => DuringGamePage(
+          game: _createSampleGame(),
+          currentPlayer: const PlayerModel(
+            id: 'host_player',
+            name: 'Host Player',
+            inFor: 100,
+            isHost: true,
+            isOnline: true,
+            hasPaid: true,
+          ),
+        ),
+        '/during_player': (_) => DuringGamePage(
+          game: _createSampleGame(),
+          currentPlayer: const PlayerModel(
+            id: 'regular_player',
+            name: 'Regular Player',
+            inFor: 100,
+            isHost: false,
+            isOnline: true,
+            hasPaid: true,
+          ),
+        ),
         '/end_host': (_) => EndGameHostPage(),
         
         '/end_player': (_) => EndGamePage(
@@ -84,18 +105,54 @@ class MainPage extends StatelessWidget {
   }
 }
 
-class DuringGameHostPage extends StatelessWidget {
-  const DuringGameHostPage({super.key});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("During Game - Host")));
-}
-
-class DuringGamePlayerPage extends StatelessWidget {
-  const DuringGamePlayerPage({super.key});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("During Game - Player")));
+GameModel _createSampleGame() {
+  return GameModel(
+    id: 'ABC1234',
+    hostId: 'host_player',
+    hostName: 'Host Player',
+    players: [
+      const PlayerModel(
+        id: 'host_player',
+        name: 'Host Player',
+        inFor: 100,
+        isHost: true,
+        isOnline: true,
+        hasPaid: true,
+      ),
+      const PlayerModel(
+        id: 'player1',
+        name: 'Alice Johnson',
+        inFor: 100,
+        isHost: false,
+        isOnline: true,
+        hasPaid: true,
+      ),
+      const PlayerModel(
+        id: 'player2',
+        name: 'Bob Smith',
+        inFor: 150,
+        isHost: false,
+        isOnline: true,
+        hasPaid: false,
+      ),
+      const PlayerModel(
+        id: 'player3',
+        name: 'Carol Davis',
+        inFor: 100,
+        isHost: false,
+        isOnline: false,
+        hasPaid: true,
+      ),
+    ],
+    status: GameStatus.playing,
+    type: GameType.cash,
+    maxPlayers: 8,
+    currentPlayers: 4,
+    buyIn: 100,
+    createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+    startedAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 30)),
+    venmoUsername: 'renaaron',
+  );
 }
 
 class EndGameHostPage extends StatelessWidget {
