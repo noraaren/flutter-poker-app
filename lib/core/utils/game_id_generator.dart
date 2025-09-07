@@ -1,0 +1,29 @@
+import 'dart:math';
+
+class GameIdGenerator {
+  static const String _chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  static const int _idLength = 7; // 7 characters, e.g., JX3T7H8
+  
+  // Generate a short, readable game ID (always 7 chars, letters+numbers)
+  static String generateGameId() {
+    final random = Random();
+    final buffer = StringBuffer();
+    
+    for (int i = 0; i < _idLength; i++) {
+      buffer.write(_chars[random.nextInt(_chars.length)]);
+    }
+    
+    return buffer.toString();
+  }
+  
+  // Validate if a game ID format is correct (7 uppercase alphanumeric)
+  static bool isValidGameId(String gameId) {
+    final cleanId = gameId.replaceAll(RegExp(r'[^A-Z0-9]'), '').toUpperCase();
+    return RegExp(r'^[A-Z0-9]{7}$').hasMatch(cleanId);
+  }
+  
+  // Clean and format a game ID for consistency
+  static String formatGameId(String gameId) {
+    return gameId.replaceAll(RegExp(r'[^A-Z0-9]'), '').toUpperCase();
+  }
+} 
