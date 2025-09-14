@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../provider/game_provider.dart';
+import '../provider/player_provider.dart';
 import '../models/game_model.dart';
-import '../../../core/services/firebase_service.dart';
+import '../models/player_model.dart';
+import '../../../core/utils/validators.dart';
 
 class HostGamePage extends StatefulWidget {
   const HostGamePage({super.key});
@@ -15,17 +18,13 @@ class _HostGamePageState extends State<HostGamePage> {
   final _hostNameController = TextEditingController();
   final _buyInController = TextEditingController();
   final _maxPlayersController = TextEditingController();
+  final _venmoUsernameController = TextEditingController();
   GameType _selectedGameType = GameType.cash;
-  bool _isLoading = false;
-  String? _error;
   String? _createdGameId;
-
-  late final GameProvider _gameProvider;
 
   @override
   void initState() {
     super.initState();
-    _gameProvider = GameProvider(FirebaseService());
     _buyInController.text = '100';
     _maxPlayersController.text = '8';
   }
@@ -35,6 +34,7 @@ class _HostGamePageState extends State<HostGamePage> {
     _hostNameController.dispose();
     _buyInController.dispose();
     _maxPlayersController.dispose();
+    _venmoUsernameController.dispose();
     super.dispose();
   }
 
@@ -43,40 +43,51 @@ class _HostGamePageState extends State<HostGamePage> {
       return;
     }
 
+    final gameProvider = context.read<GameProvider>();
+    final playerProvider = context.read<PlayerProvider>();
+    
     setState(() {
-      _isLoading = true;
-      _error = null;
       _createdGameId = null;
     });
 
-    try {
-      final gameId = await _gameProvider.createGame(
-        hostId: 'host_${DateTime.now().millisecondsSinceEpoch}', // Simple host ID generation
-        hostName: _hostNameController.text.trim(),
-        buyIn: int.parse(_buyInController.text),
-        maxPlayers: int.parse(_maxPlayersController.text),
-        type: _selectedGameType,
-      );
+    final hostId = 'host_${DateTime.now().millisecondsSinceEpoch}';
+    final hostName = _hostNameController.text.trim();
+    final buyIn = int.parse(_buyInController.text);
 
-      if (gameId != null) {
-        setState(() {
-          _createdGameId = gameId;
-          _isLoading = false;
-        });
-        
-        // Show success dialog
-        _showSuccessDialog(gameId);
-      } else {
-        setState(() {
-          _error = _gameProvider.error ?? 'Failed to create game';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
+    final gameId = await gameProvider.createGame(
+      hostId: hostId,
+      hostName: hostName,
+      buyIn: buyIn,
+      maxPlayers: int.parse(_maxPlayersController.text),
+      type: _selectedGameType,
+      venmoUsername: _venmoUsernameController.text.trim().isNotEmpty 
+          ? _venmoUsernameController.text.trim() 
+          : null,
+    );
+
+    if (gameId != null) {
+      // Create host player and save to PlayerProvider
+      final hostPlayer = PlayerModel(
+        id: hostId,
+        name: hostName,
+        inFor: buyIn,
+        isHost: true,
+        isOnline: true,
+        hasPaid: false,
+      );
+      
+      // Set the current player as the host
+      playerProvider.setCurrentPlayer(hostPlayer, gameId, isHost: true);
+      
       setState(() {
-        _error = e.toString();
-        _isLoading = false;
+        _createdGameId = gameId;
       });
+      
+      // Start listening to the game for real-time updates
+      gameProvider.startListeningToGame(gameId);
+      
+      // Show success dialog
+      _showSuccessDialog(gameId);
     }
   }
 
@@ -102,6 +113,13 @@ class _HostGamePageState extends State<HostGamePage> {
             },
             child: const Text('OK'),
           ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushReplacementNamed('/during_game');
+            },
+            child: const Text('Start Game'),
+          ),
         ],
       ),
     );
@@ -115,13 +133,15 @@ class _HostGamePageState extends State<HostGamePage> {
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: Consumer<GameProvider>(
+        builder: (context, gameProvider, child) {
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // Host Name Field
               TextFormField(
                 controller: _hostNameController,
@@ -203,94 +223,116 @@ class _HostGamePageState extends State<HostGamePage> {
                   });
                 },
               ),
-              const SizedBox(height: 24),
-
-              // Error Display
-              if (_error != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    border: Border.all(color: Colors.red),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(color: Colors.red[700]),
-                  ),
-                ),
-
-              if (_error != null) const SizedBox(height: 16),
-
-              // Host Game Button
-              ElevatedButton(
-                onPressed: _isLoading ? null : _hostGame,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: _isLoading
-                    ? const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Text('Creating Game...'),
-                        ],
-                      )
-                    : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add),
-                          SizedBox(width: 8),
-                          Text(
-                            'Host Game',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-              ),
-
               const SizedBox(height: 16),
 
-              // Created Game ID Display
-              if (_createdGameId != null)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    border: Border.all(color: Colors.green),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Game Created!',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Game ID: $_createdGameId'),
-                    ],
-                  ),
+              // Venmo Username Field
+              TextFormField(
+                controller: _venmoUsernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Venmo Username (Optional)',
+                  hintText: 'Enter your Venmo username for payments',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.payment),
                 ),
-            ],
-          ),
-        ),
+                validator: (value) {
+                  if (value != null && value.trim().isNotEmpty) {
+                    if (!isValidVenmoUsername(value.trim())) {
+                      return 'Please enter a valid Venmo username (3-16 characters, alphanumeric and underscores only)';
+                    }
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+
+                  // Error Display
+                  if (gameProvider.error != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        border: Border.all(color: Colors.red),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        gameProvider.error!,
+                        style: TextStyle(color: Colors.red[700]),
+                      ),
+                    ),
+
+                  if (gameProvider.error != null) const SizedBox(height: 16),
+
+                  // Host Game Button
+                  ElevatedButton(
+                    onPressed: gameProvider.isLoading ? null : _hostGame,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: gameProvider.isLoading
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Text('Creating Game...'),
+                            ],
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add),
+                              SizedBox(width: 8),
+                              Text(
+                                'Host Game',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Created Game ID Display
+                  if (_createdGameId != null)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        border: Border.all(color: Colors.green),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Game Created!',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Game ID: $_createdGameId'),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

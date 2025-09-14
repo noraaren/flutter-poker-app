@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../core/services/venmo_service.dart';
 import '../models/game_model.dart';
 import '../models/player_model.dart';
+import '../provider/game_provider.dart';
+import '../provider/player_provider.dart';
 
 class DuringGamePage extends StatefulWidget {
-  final GameModel game;
-  final PlayerModel currentPlayer;
-
-  const DuringGamePage({
-    super.key,
-    required this.game,
-    required this.currentPlayer,
-  });
+  const DuringGamePage({super.key});
 
   @override
   State<DuringGamePage> createState() => _DuringGamePageState();
@@ -26,9 +22,21 @@ class _DuringGamePageState extends State<DuringGamePage> {
   @override
   void initState() {
     super.initState();
-    _topOffController.text = widget.game.buyIn.toString();
-    if (widget.game.venmoUsername != null) {
-      _venmoUsernameController.text = widget.game.venmoUsername!;
+    // Initialize with default values, will be updated when game data loads
+    _topOffController.text = '100';
+  }
+
+  void _updateControllersFromGame(GameModel game) {
+    // Update top-off amount based on game buy-in
+    if (_topOffController.text == '100') {
+      _topOffController.text = game.buyIn.toString();
+    }
+    
+    // Update Venmo username if available and not already set
+    if (game.venmoUsername != null && 
+        game.venmoUsername!.isNotEmpty && 
+        _venmoUsernameController.text.isEmpty) {
+      _venmoUsernameController.text = game.venmoUsername!;
     }
   }
 
@@ -39,9 +47,9 @@ class _DuringGamePageState extends State<DuringGamePage> {
     super.dispose();
   }
 
-  int get _totalBuyIns => widget.game.players.fold(0, (sum, player) => sum + player.inFor);
+  int _getTotalBuyIns(List<PlayerModel> players) => players.fold(0, (sum, player) => sum + player.inFor);
 
-  Future<void> _handleTopOff() async {
+  Future<void> _handleTopOff(GameModel game) async {
     if (_topOffController.text.trim().isEmpty) {
       _showErrorSnackBar('Please enter a top-off amount');
       return;
@@ -53,7 +61,7 @@ class _DuringGamePageState extends State<DuringGamePage> {
       return;
     }
 
-    if (widget.game.venmoUsername == null || widget.game.venmoUsername!.isEmpty) {
+    if (game.venmoUsername == null || game.venmoUsername!.isEmpty) {
       _showErrorSnackBar('Host has not set their Venmo username');
       return;
     }
@@ -64,9 +72,9 @@ class _DuringGamePageState extends State<DuringGamePage> {
 
     try {
       final success = await VenmoService.launchVenmoTransaction(
-        venmoUsername: widget.game.venmoUsername!,
+        venmoUsername: game.venmoUsername!,
         amount: amount.toDouble(),
-        note: 'Poker game top-off - ${widget.game.id}',
+        note: 'Poker game top-off - ${game.id}',
         context: context,
         transactionType: VenmoTransactionType.pay,
       );
@@ -85,7 +93,7 @@ class _DuringGamePageState extends State<DuringGamePage> {
     }
   }
 
-  void _showTopOffDialog() {
+  void _showTopOffDialog(GameModel game) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -104,7 +112,7 @@ class _DuringGamePageState extends State<DuringGamePage> {
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             ),
             const SizedBox(height: 16),
-            if (widget.game.venmoUsername != null) ...[
+            if (game.venmoUsername != null) ...[
               TextField(
                 controller: _venmoUsernameController,
                 decoration: const InputDecoration(
@@ -128,7 +136,7 @@ class _DuringGamePageState extends State<DuringGamePage> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: widget.game.venmoUsername != null ? _handleTopOff : null,
+            onPressed: game.venmoUsername != null ? () => _handleTopOff(game) : null,
             child: _isProcessingPayment
                 ? const SizedBox(
                     width: 20,
@@ -142,7 +150,7 @@ class _DuringGamePageState extends State<DuringGamePage> {
     );
   }
 
-  void _showEndGameDialog() {
+  void _showEndGameDialog(GameModel game) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -154,10 +162,16 @@ class _DuringGamePageState extends State<DuringGamePage> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              // TODO: Implement end game functionality
-              _showSuccessSnackBar('Game ended successfully');
+              final gameProvider = context.read<GameProvider>();
+              final success = await gameProvider.endGame(game.id!);
+              if (success) {
+                _showSuccessSnackBar('Game ended successfully');
+                Navigator.of(context).pushReplacementNamed('/end_game');
+              } else {
+                _showErrorSnackBar('Failed to end game');
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('End Game'),
@@ -167,7 +181,7 @@ class _DuringGamePageState extends State<DuringGamePage> {
     );
   }
 
-  void _showLeaveGameDialog() {
+  void _showLeaveGameDialog(GameModel game) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -179,14 +193,70 @@ class _DuringGamePageState extends State<DuringGamePage> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              // TODO: Implement leave game functionality
-              Navigator.of(context).pop(); // Go back to main page
-              _showSuccessSnackBar('Left game successfully');
+              final gameProvider = context.read<GameProvider>();
+              final playerProvider = context.read<PlayerProvider>();
+              final success = await gameProvider.leaveGame(game.id!, playerProvider.playerId!);
+              if (success) {
+                gameProvider.clearGame();
+                Navigator.of(context).pop(); // Go back to main page
+                _showSuccessSnackBar('Left game successfully');
+              } else {
+                _showErrorSnackBar('Failed to leave game');
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Leave Game'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showVenmoUsernameDialog(GameModel game) {
+    final venmoController = TextEditingController(text: game.venmoUsername ?? '');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Update Venmo Username'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter your Venmo username for receiving payments:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: venmoController,
+              decoration: const InputDecoration(
+                labelText: 'Venmo Username',
+                hintText: 'e.g., john_doe123',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.payment),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final gameProvider = context.read<GameProvider>();
+              final success = await gameProvider.updateVenmoUsername(
+                game.id!, 
+                venmoController.text.trim(),
+              );
+              if (success) {
+                _showSuccessSnackBar('Venmo username updated successfully');
+              } else {
+                _showErrorSnackBar(gameProvider.error ?? 'Failed to update Venmo username');
+              }
+            },
+            child: const Text('Update'),
           ),
         ],
       ),
@@ -213,26 +283,119 @@ class _DuringGamePageState extends State<DuringGamePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Game: ${widget.game.id}'),
-        backgroundColor: widget.currentPlayer.isHost ? Colors.green[700] : Colors.blue[700],
-        foregroundColor: Colors.white,
-        actions: [
-          if (widget.currentPlayer.isHost)
-            IconButton(
-              onPressed: _showEndGameDialog,
-              icon: const Icon(Icons.stop),
-              tooltip: 'End Game',
-            )
-          else
-            IconButton(
-              onPressed: _showLeaveGameDialog,
-              icon: const Icon(Icons.exit_to_app),
-              tooltip: 'Leave Game',
+    return Consumer2<GameProvider, PlayerProvider>(
+      builder: (context, gameProvider, playerProvider, child) {
+        final game = gameProvider.currentGame;
+        final player = playerProvider.currentPlayer;
+        
+        // Check if player exists
+        if (player == null) {
+          return Scaffold(
+            appBar: AppBar(title: Text('No Player')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('No player data available'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('Go Back'),
+                  ),
+                ],
+              ),
             ),
-        ],
-      ),
+          );
+        }
+        
+        print('DuringGamePage - GameProvider state: isLoading=${gameProvider.isLoading}, error=${gameProvider.error}, game=${game?.id}'); // Debug log
+        
+        if (gameProvider.isLoading && game == null) {
+          return Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        if (gameProvider.error != null && game == null) {
+          return Scaffold(
+            appBar: AppBar(title: Text('Error')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Error: ${gameProvider.error}'),
+                  ElevatedButton(
+                    onPressed: () => gameProvider.clearGame(),
+                    child: Text('Go Back'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        if (game == null) {
+          return Scaffold(
+            appBar: AppBar(title: Text('No Game')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('No game data available'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () async {
+                      // Try to fetch game data manually
+                      print('Attempting to fetch game data manually'); // Debug log
+                      final gameProvider = context.read<GameProvider>();
+                      gameProvider.debugState(); // Debug log
+                      if (gameProvider.currentGameId != null) {
+                        await gameProvider.fetchGame(gameProvider.currentGameId!);
+                      } else {
+                        print('No current game ID available for retry'); // Debug log
+                      }
+                    },
+                    child: Text('Retry'),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('Go Back'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        // Update controllers with game data
+        _updateControllersFromGame(game);
+        
+        return Scaffold(
+          appBar: AppBar(
+            title: Text('Game: ${game.id}'),
+            backgroundColor: context.watch<PlayerProvider>().isHost ? Colors.green[700] : Colors.blue[700],
+            foregroundColor: Colors.white,
+            actions: [
+              if (context.watch<PlayerProvider>().isHost) ...[
+                IconButton(
+                  onPressed: () => _showVenmoUsernameDialog(game),
+                  icon: const Icon(Icons.payment),
+                  tooltip: 'Update Venmo Username',
+                ),
+                IconButton(
+                  onPressed: () => _showEndGameDialog(game),
+                  icon: const Icon(Icons.stop),
+                  tooltip: 'End Game',
+                ),
+              ] else
+                IconButton(
+                  onPressed: () => _showLeaveGameDialog(game),
+                  icon: const Icon(Icons.exit_to_app),
+                  tooltip: 'Leave Game',
+                ),
+            ],
+          ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -259,17 +422,24 @@ class _DuringGamePageState extends State<DuringGamePage> {
                         _buildStatItem(
                           icon: Icons.group,
                           label: 'Players',
-                          value: '${widget.game.currentPlayers}/${widget.game.maxPlayers}',
+                          value: '${game.currentPlayers}/${game.maxPlayers}',
                         ),
                         _buildStatItem(
                           icon: Icons.attach_money,
                           label: 'Total Buy-ins',
-                          value: '\$${_totalBuyIns.toStringAsFixed(0)}',
+                          value: '\$${_getTotalBuyIns(game.players).toStringAsFixed(0)}',
                         ),
                         _buildStatItem(
                           icon: Icons.casino,
                           label: 'Buy-in',
-                          value: '\$${widget.game.buyIn}',
+                          value: '\$${game.buyIn}',
+                        ),
+                        _buildStatItem(
+                          icon: Icons.payment,
+                          label: 'Venmo',
+                          value: game.venmoUsername != null && game.venmoUsername!.isNotEmpty 
+                              ? '@${game.venmoUsername}' 
+                              : 'Not Set',
                         ),
                       ],
                     ),
@@ -297,9 +467,9 @@ class _DuringGamePageState extends State<DuringGamePage> {
                       const SizedBox(height: 16),
                       Expanded(
                         child: ListView.builder(
-                          itemCount: widget.game.players.length,
+                          itemCount: game.players.length,
                           itemBuilder: (context, index) {
-                            final player = widget.game.players[index];
+                            final player = game.players[index];
                             return _buildPlayerTile(player);
                           },
                         ),
@@ -316,7 +486,7 @@ class _DuringGamePageState extends State<DuringGamePage> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _showTopOffDialog,
+                    onPressed: () => _showTopOffDialog(game),
                     icon: const Icon(Icons.add),
                     label: const Text('Add Buy-in'),
                     style: ElevatedButton.styleFrom(
@@ -327,10 +497,10 @@ class _DuringGamePageState extends State<DuringGamePage> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                if (widget.currentPlayer.isHost)
+                if (context.watch<PlayerProvider>().isHost)
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _showEndGameDialog,
+                      onPressed: () => _showEndGameDialog(game),
                       icon: const Icon(Icons.stop),
                       label: const Text('End Game'),
                       style: ElevatedButton.styleFrom(
@@ -343,7 +513,7 @@ class _DuringGamePageState extends State<DuringGamePage> {
                 else
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _showLeaveGameDialog,
+                      onPressed: () => _showLeaveGameDialog(game),
                       icon: const Icon(Icons.exit_to_app),
                       label: const Text('Leave Game'),
                       style: ElevatedButton.styleFrom(
@@ -358,6 +528,8 @@ class _DuringGamePageState extends State<DuringGamePage> {
           ],
         ),
       ),
+        );
+      },
     );
   }
 
@@ -389,7 +561,8 @@ class _DuringGamePageState extends State<DuringGamePage> {
   }
 
   Widget _buildPlayerTile(PlayerModel player) {
-    final isCurrentPlayer = player.id == widget.currentPlayer.id;
+    final playerProvider = context.read<PlayerProvider>();
+    final isCurrentPlayer = player.id == playerProvider.playerId;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
