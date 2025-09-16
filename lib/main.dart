@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
-import 'core/services/venmo_service.dart';
 import 'features/game/pages/end_game_page.dart';
-import 'features/game/models/player_model.dart';
-
+import 'features/game/pages/during_game_page.dart';
 import 'features/game/pages/host_game_page.dart';
 import 'features/game/pages/join_game_page.dart';
+import 'features/game/provider/game_provider.dart';
+import 'features/game/provider/player_provider.dart';
+import 'core/services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // required for async setup
@@ -21,30 +23,22 @@ class PokerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Poker App',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: MainPage(),
-      routes: {
-        '/host': (_) => HostGamePage(),
-        '/join': (_) => JoinGamePage(),
-        '/during_host': (_) => DuringGameHostPage(),
-        '/during_player': (_) => DuringGamePlayerPage(),
-        '/end_host': (_) => EndGameHostPage(),
-        
-        '/end_player': (_) => EndGamePage(
-          player: const PlayerModel(
-            id: 'test_player',
-            name: 'John Doe',
-            inFor: 100,
-            isHost: false,
-            isOnline: true,
-            hasPaid: true,
-          ),
-          hostVenmoUsername: 'renaaron',
-          initialBuyIn: 100, // Initial buy-in from game data
-        ),
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => GameProvider(FirebaseService())),
+        ChangeNotifierProvider(create: (context) => PlayerProvider()),
+      ],
+      child: MaterialApp(
+        title: 'Poker App',
+        theme: ThemeData(primarySwatch: Colors.blue),
+        home: MainPage(),
+        routes: {
+          '/host': (_) => HostGamePage(),
+          '/join': (_) => JoinGamePage(),
+          '/during_game': (_) => DuringGamePage(),
+          '/end_game': (_) => EndGamePage(),
+        },
+      ),
     );
   }
 }
@@ -53,11 +47,8 @@ class MainPage extends StatelessWidget {
   final List<Map<String, String>> pages = [
     {'label': 'Host Game', 'route': '/host'},
     {'label': 'Join Game', 'route': '/join'},
-    {'label': 'During Game - Host', 'route': '/during_host'},
-    {'label': 'During Game - Player', 'route': '/during_player'},
-    {'label': 'End Game - Host', 'route': '/end_host'},
-    {'label': 'End Game - Player', 'route': '/end_player'},
-
+    {'label': 'During Game (Demo)', 'route': '/during_game'},
+    {'label': 'End Game (Demo)', 'route': '/end_game'},
   ];
 
   MainPage({super.key});
@@ -84,26 +75,6 @@ class MainPage extends StatelessWidget {
   }
 }
 
-class DuringGameHostPage extends StatelessWidget {
-  const DuringGameHostPage({super.key});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("During Game - Host")));
-}
-
-class DuringGamePlayerPage extends StatelessWidget {
-  const DuringGamePlayerPage({super.key});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("During Game - Player")));
-}
-
-class EndGameHostPage extends StatelessWidget {
-  const EndGameHostPage({super.key});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text("End Game - Host")));
-}
 
 
 

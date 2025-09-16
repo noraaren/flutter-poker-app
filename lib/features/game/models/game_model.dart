@@ -30,10 +30,37 @@ abstract class GameModel with _$GameModel {
 
   factory GameModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    return GameModel.fromJson({
+    
+    // Convert Firestore timestamps to ISO string format for JSON serialization
+    final convertedData = <String, dynamic>{
       'id': doc.id,
       ...data,
-    });
+    };
+    
+    // Handle createdAt timestamp - convert to ISO string
+    if (convertedData['createdAt'] is Timestamp) {
+      final dateTime = (convertedData['createdAt'] as Timestamp).toDate();
+      convertedData['createdAt'] = dateTime.toIso8601String();
+      print('Converted createdAt: ${convertedData['createdAt']}'); // Debug log
+    }
+    
+    // Handle startedAt timestamp - convert to ISO string
+    if (convertedData['startedAt'] is Timestamp) {
+      final dateTime = (convertedData['startedAt'] as Timestamp).toDate();
+      convertedData['startedAt'] = dateTime.toIso8601String();
+      print('Converted startedAt: ${convertedData['startedAt']}'); // Debug log
+    }
+    
+    // Handle endedAt timestamp - convert to ISO string
+    if (convertedData['endedAt'] is Timestamp) {
+      final dateTime = (convertedData['endedAt'] as Timestamp).toDate();
+      convertedData['endedAt'] = dateTime.toIso8601String();
+      print('Converted endedAt: ${convertedData['endedAt']}'); // Debug log
+    }
+    
+    print('Converted data before JSON parsing: $convertedData'); // Debug log
+    
+    return GameModel.fromJson(convertedData);
   }
 }
 

@@ -1,20 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../core/services/venmo_service.dart';
 import '../../../core/utils/validators.dart';
-import '../models/player_model.dart';
+import '../provider/game_provider.dart';
+import '../provider/player_provider.dart';
 
 class EndGamePage extends StatefulWidget {
-  final PlayerModel player;
-  final String? hostVenmoUsername;
-  final int initialBuyIn; // Initial buy-in from game data
-
-  const EndGamePage({
-    super.key,
-    required this.player,
-    this.hostVenmoUsername,
-    required this.initialBuyIn,
-  });
+  const EndGamePage({super.key});
 
   @override
   State<EndGamePage> createState() => _EndGamePageState();
@@ -32,10 +25,7 @@ class _EndGamePageState extends State<EndGamePage> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill with host's Venmo username if available
-    if (widget.hostVenmoUsername != null) {
-      _venmoUsernameController.text = widget.hostVenmoUsername!;
-    }
+    // Will be populated from game data via provider
   }
 
   @override
@@ -53,9 +43,10 @@ class _EndGamePageState extends State<EndGamePage> {
 
       final finalStack = double.parse(_finalStackController.text);
       
-      // Since all payments were made beforehand, the difference is just the final stack
-      // Players only request money if they have chips left, or owe nothing if they're even
-      final difference = finalStack;
+      // Calculate the difference between final stack and what they put in (inFor)
+      // This determines if they made money, lost money, or broke even
+      final playerProvider = context.read<PlayerProvider>();
+      final difference = finalStack - playerProvider.playerBuyIn!;
 
       setState(() {
         _finalStack = finalStack;
@@ -85,20 +76,29 @@ class _EndGamePageState extends State<EndGamePage> {
       return;
     }
 
-    if (_difference! > 0) {
+    if (_finalStack! > 0) {
       // Player has chips left - request payment from host
-      final note = "Poker winnings for ${widget.player.name}";
+      final playerProvider = context.read<PlayerProvider>();
+      final note = _difference! > 0 
+          ? "Poker winnings for ${playerProvider.playerName}"
+          : "Poker payment for ${playerProvider.playerName}";
       await VenmoService.requestWithVenmo(
         venmoUsername: venmoUsername,
-        amount: _difference!,
+        amount: _finalStack!,
         note: note,
         context: context,
       );
     } else {
-      // Player is even (no chips left) - no transaction needed
+      // Player has no chips left - no payment needed
+      final message = _difference! > 0
+          ? 'You made money but have no chips left. No payment needed.'
+          : _difference! < 0
+              ? 'You lost money and have no chips left. No payment needed.'
+              : 'You broke even with no chips left. No payment needed.';
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Break even! No payment needed.'),
+        SnackBar(
+          content: Text(message),
         ),
       );
     }
@@ -106,19 +106,120 @@ class _EndGamePageState extends State<EndGamePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('End Game'),
-        backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+    return Consumer2<GameProvider, PlayerProvider>(
+      builder: (context, gameProvider, playerProvider, child) {
+        final game = gameProvider.currentGame;
+        final player = playerProvider.currentPlayer;
+        
+        // Check if player exists
+        if (player == null) {
+          return Scaffold(
+            appBar: AppBar(title: Text('No Player')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('No player data available'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('Go Back'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        print('EndGamePage - GameProvider state: isLoading=${gameProvider.isLoading}, error=${gameProvider.error}, game=${game?.id}'); // Debug log
+        
+        if (gameProvider.isLoading && game == null) {
+          return Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        if (gameProvider.error != null && game == null) {
+          return Scaffold(
+            appBar: AppBar(title: Text('Error')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Error: ${gameProvider.error}'),
+                  ElevatedButton(
+                    onPressed: () => gameProvider.clearGame(),
+                    child: Text('Go Back'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        if (game == null) {
+          return Scaffold(
+            appBar: AppBar(title: Text('No Game')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('No game data available'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () async {
+                      print('Attempting to fetch game data manually in EndGamePage'); // Debug log
+                      final gameProvider = context.read<GameProvider>();
+                      if (gameProvider.currentGameId != null) {
+                        await gameProvider.fetchGame(gameProvider.currentGameId!);
+                      } else {
+                        print('No current game ID available for retry in EndGamePage'); // Debug log
+                      }
+                    },
+                    child: Text('Retry'),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('Go Back'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        // Initialize Venmo username if not already set
+        if (_venmoUsernameController.text.isEmpty && game.venmoUsername != null) {
+          _venmoUsernameController.text = game.venmoUsername!;
+        }
+        
+        // Show warning if Venmo username is not set
+        if (game.venmoUsername == null || game.venmoUsername!.isEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Host has not set their Venmo username. Please contact the host.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 5),
+              ),
+            );
+          });
+        }
+        
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('End Game'),
+            backgroundColor: Colors.green[700],
+            foregroundColor: Colors.white,
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // Player Info Card
               Card(
                 child: Padding(
@@ -127,18 +228,42 @@ class _EndGamePageState extends State<EndGamePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Player: ${widget.player.name}',
+                        'Player: ${context.watch<PlayerProvider>().playerName}',
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'In For: \$${widget.player.inFor}',
+                        'In For: \$${context.watch<PlayerProvider>().playerBuyIn}',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Initial Buy-in: \$${widget.initialBuyIn}',
+                        'Initial Buy-in: \$${game.buyIn}',
                         style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.payment,
+                            size: 16,
+                            color: game.venmoUsername != null && game.venmoUsername!.isNotEmpty 
+                                ? Colors.green 
+                                : Colors.red,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            game.venmoUsername != null && game.venmoUsername!.isNotEmpty 
+                                ? 'Venmo: @${game.venmoUsername}' 
+                                : 'Venmo: Not Set',
+                            style: TextStyle(
+                              color: game.venmoUsername != null && game.venmoUsername!.isNotEmpty 
+                                  ? Colors.green 
+                                  : Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -206,17 +331,19 @@ class _EndGamePageState extends State<EndGamePage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Amount to Request: \$${_difference!.toStringAsFixed(2)}',
+                          'Amount to Request: \$${_finalStack!.toStringAsFixed(2)}',
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: _difference! > 0 ? Colors.green[700] : Colors.grey[700],
+                            color: _difference! > 0 ? Colors.green[700] : _difference! < 0 ? Colors.red[700] : Colors.grey[700],
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           _difference! > 0
-                              ? 'You have chips left! Request payment from host.'
-                              : 'Break even! No payment needed.',
+                              ? 'You made money! Request payment from host.'
+                              : _difference! < 0
+                                  ? 'You lost money. Request payment if you have chips left.'
+                                  : 'You broke even! Request payment if you have chips left.',
                           style: Theme.of(context).textTheme.bodyMedium,
                           textAlign: TextAlign.center,
                         ),
@@ -248,19 +375,25 @@ class _EndGamePageState extends State<EndGamePage> {
 
                 // Venmo Transaction Button
                 ElevatedButton(
-                  onPressed: _difference! > 0 ? _handleVenmoTransaction : null,
+                  onPressed: (_difference! > 0 || (_difference! <= 0 && _finalStack! > 0)) ? _handleVenmoTransaction : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[700],
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: const Text('Request Payment via Venmo'),
+                  child: Text(
+                    _difference! > 0 
+                        ? 'Request Winnings via Venmo'
+                        : 'Request Payment via Venmo'
+                  ),
                 ),
               ],
             ],
           ),
         ),
       ),
+        );
+      },
     );
   }
 } 
